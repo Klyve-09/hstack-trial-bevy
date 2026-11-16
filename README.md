@@ -24,12 +24,14 @@ optimization is left at Cargo's default to keep compilation time down.
 
 - Menu: Enter opens the garden; S opens settings.
 - Garden: WASD or arrow keys move. Obstacles and the garden edge block movement.
-- Settings: F toggles the FPS display and saves immediately.
+- Settings: F toggles the FPS display; H toggles movement hints in the garden.
+  Both preferences save immediately. Esc remains visible when hints are off.
 - Esc returns to the menu from either screen. Close the window to quit.
 
 ## Device settings
 
-The FPS preference is the only saved feature. Settings are JSON with a top-level
+The FPS and movement hints preferences are saved. Movement hints start enabled.
+Settings are JSON with a top-level
 `version` field (currently `1`), stored using `directories::ProjectDirs` for
 organization `Klyve` and application `Drift`:
 

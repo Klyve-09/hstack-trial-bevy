@@ -124,10 +124,17 @@ fn toggle_settings(
     file: Res<SettingsFile>,
     mut status: ResMut<SaveStatus>,
 ) {
-    if !keys.just_pressed(KeyCode::KeyF) {
+    let toggle_fps = keys.just_pressed(KeyCode::KeyF);
+    let toggle_hints = keys.just_pressed(KeyCode::KeyH);
+    if !toggle_fps && !toggle_hints {
         return;
     }
-    settings.show_fps = !settings.show_fps;
+    if toggle_fps {
+        settings.show_fps = !settings.show_fps;
+    }
+    if toggle_hints {
+        settings.show_movement_hints = !settings.show_movement_hints;
+    }
     status.0 = match &file.0 {
         Some(path) => match settings.save(path) {
             Ok(()) => "Saved on this device.".into(),
@@ -144,8 +151,13 @@ fn update_settings_text(
 ) {
     for mut text in &mut text {
         **text = format!(
-            "F  Show FPS: {}\n\nEsc  Back to menu\n\n{}",
+            "F  Show FPS: {}\nH  Movement hints: {}\n\nEsc  Back to menu\n\n{}",
             if settings.show_fps { "On" } else { "Off" },
+            if settings.show_movement_hints {
+                "On"
+            } else {
+                "Off"
+            },
             status.0
         );
     }
@@ -169,13 +181,16 @@ fn update_fps(
     }
 }
 
-fn playing(mut commands: Commands) {
-    label(
-        &mut commands,
-        "WASD / Arrow keys  Move     Esc  Menu",
-        18.0,
-        14.0,
-    );
+fn garden_controls(settings: &Settings) -> &'static str {
+    if settings.show_movement_hints {
+        "WASD / Arrow keys  Move     Esc  Menu"
+    } else {
+        "Esc  Menu"
+    }
+}
+
+fn playing(mut commands: Commands, settings: Res<Settings>) {
+    label(&mut commands, garden_controls(&settings), 18.0, 14.0);
     commands.spawn((
         ScreenEntity,
         Sprite::from_color(Color::srgb(0.07, 0.12, 0.18), HALF_ARENA * 2.0),
@@ -219,6 +234,34 @@ fn clear_screen(mut commands: Commands, entities: Query<Entity, With<ScreenEntit
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn movement_hints_toggle_saves_without_changing_fps() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<Settings>()
+            .init_resource::<SaveStatus>()
+            .insert_resource(SettingsFile(Some(path.clone())))
+            .add_systems(Update, toggle_settings);
+        for expected in [false, true] {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::KeyH);
+            app.update();
+            let saved = Settings::load(&path).unwrap();
+            assert_eq!(saved.show_movement_hints, expected);
+            assert!(!saved.show_fps);
+            assert_eq!(garden_controls(&saved).contains("WASD"), expected);
+            assert!(garden_controls(&saved).contains("Esc  Menu"));
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .reset_all();
+            app.update();
+        }
+    }
 
     #[test]
     fn fps_toggle_saves_the_preference() {

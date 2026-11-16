@@ -11,6 +11,7 @@ use std::{
 pub struct Settings {
     pub version: u32,
     pub show_fps: bool,
+    pub show_movement_hints: bool,
 }
 
 impl Default for Settings {
@@ -18,6 +19,7 @@ impl Default for Settings {
         Self {
             version: 1,
             show_fps: false,
+            show_movement_hints: true,
         }
     }
 }
