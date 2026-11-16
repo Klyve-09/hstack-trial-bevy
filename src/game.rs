@@ -70,20 +70,29 @@ fn reset_score(mut score: ResMut<Score>) {
     score.0 = 0;
 }
 
+fn overlaps(a_center: Vec2, a_size: Vec2, b_center: Vec2, b_size: Vec2) -> bool {
+    let distance = (a_center - b_center).abs();
+    let extent = (a_size + b_size) / 2.0;
+    distance.x < extent.x && distance.y < extent.y
+}
+
 pub fn collect_items(
     mut commands: Commands,
     mut score: ResMut<Score>,
     players: Query<&Transform, With<Player>>,
     items: Query<(Entity, &Transform), With<Item>>,
 ) {
-    let extent = (PLAYER_SIZE + ITEM_SIZE) / 2.0;
-    for (entity, item) in &items {
-        if players.iter().any(|player| {
-            let distance = (player.translation - item.translation).truncate().abs();
-            distance.x < extent && distance.y < extent
+    for (item_entity, item_transform) in &items {
+        if players.iter().any(|player_transform| {
+            overlaps(
+                player_transform.translation.truncate(),
+                Vec2::splat(PLAYER_SIZE),
+                item_transform.translation.truncate(),
+                Vec2::splat(ITEM_SIZE),
+            )
         }) {
             score.0 += 1;
-            commands.entity(entity).despawn();
+            commands.entity(item_entity).despawn();
         }
     }
 }
@@ -133,9 +142,12 @@ pub fn movement(
             for delta in [Vec2::new(step.x, 0.0), Vec2::new(0.0, step.y)] {
                 let candidate = (position + delta).clamp(-limit, limit);
                 let blocked = obstacles.iter().any(|obstacle| {
-                    let distance = (candidate - obstacle.center).abs();
-                    let extent = (obstacle.size + Vec2::splat(PLAYER_SIZE)) / 2.0;
-                    distance.x < extent.x && distance.y < extent.y
+                    overlaps(
+                        candidate,
+                        Vec2::splat(PLAYER_SIZE),
+                        obstacle.center,
+                        obstacle.size,
+                    )
                 });
                 if !blocked {
                     position = candidate;
@@ -257,24 +269,30 @@ mod tests {
     }
 
     #[test]
-    fn every_item_position_is_reachable_and_clear_of_spawn() {
+    fn every_item_sits_inside_the_arena_clear_of_obstacles_and_spawn() {
         let limit = HALF_ARENA - Vec2::splat(PLAYER_SIZE / 2.0);
         for position in ITEM_POSITIONS {
             assert!(
                 position.abs().cmple(limit).all(),
                 "outside arena: {position}"
             );
-            let spawn_distance = (position - PLAYER_SPAWN).abs();
             assert!(
-                spawn_distance.x >= (PLAYER_SIZE + ITEM_SIZE) / 2.0
-                    || spawn_distance.y >= (PLAYER_SIZE + ITEM_SIZE) / 2.0,
+                !overlaps(
+                    position,
+                    Vec2::splat(ITEM_SIZE),
+                    PLAYER_SPAWN,
+                    Vec2::splat(PLAYER_SIZE),
+                ),
                 "overlaps spawn: {position}"
             );
             for obstacle in OBSTACLES {
-                let distance = (position - obstacle.center).abs();
-                let extent = (obstacle.size + Vec2::splat(PLAYER_SIZE)) / 2.0;
                 assert!(
-                    distance.x >= extent.x || distance.y >= extent.y,
+                    !overlaps(
+                        position,
+                        Vec2::splat(PLAYER_SIZE),
+                        obstacle.center,
+                        obstacle.size,
+                    ),
                     "blocked by obstacle: {position}"
                 );
             }

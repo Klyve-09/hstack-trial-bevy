@@ -2,8 +2,8 @@
 
 A small, quiet 2D obstacle garden built with Bevy. Guide a mint square around
 copper obstacles and collect gold squares to increase the score shown at the
-bottom left. Each new round restores the items and resets the score; the score
-is not saved. There is no time limit.
+bottom left. Each new round restores the items and resets the score.
+There is no time limit.
 
 ## Install and run
 
@@ -61,8 +61,7 @@ cargo run --locked
 Tests cover settings round trips, missing and invalid files, state transitions,
 time-based movement, diagonal speed, obstacle collisions, and garden boundaries.
 They also cover item collection, scoring once per item, round score resets,
-scoring only while playing, and reachable item positions. The score HUD shows
-the current round only; scores are not saved.
+scoring only while playing, and reachable item positions.
 The Bevy system tests use `MinimalPlugins` without a window or renderer.
 
 For a short display-server smoke run on Linux:

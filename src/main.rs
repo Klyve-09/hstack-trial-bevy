@@ -191,14 +191,9 @@ fn playing(mut commands: Commands) {
         18.0,
         14.0,
     );
-    commands.spawn((
-        ScreenEntity,
+    let score_text = label(&mut commands, "Score: 0", 22.0, 0.0);
+    commands.entity(score_text).insert((
         ScoreText,
-        Text::new("Score: 0"),
-        TextFont {
-            font_size: FontSize::Px(22.0),
-            ..default()
-        },
         Node {
             position_type: PositionType::Absolute,
             left: px(50),
