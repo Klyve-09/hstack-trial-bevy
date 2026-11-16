@@ -14,6 +14,8 @@ struct ScreenEntity;
 struct SettingsText;
 #[derive(Component)]
 struct FpsText;
+#[derive(Component)]
+struct ScoreText;
 #[derive(Resource, Default)]
 struct SaveStatus(String);
 
@@ -45,9 +47,16 @@ fn main() {
         }))
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .init_state::<Screen>()
+        .add_plugins(ScorePlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, (navigate, update_fps))
         .add_systems(Update, movement.run_if(in_state(Screen::Playing)))
+        .add_systems(
+            Update,
+            update_score
+                .after(collect_items)
+                .run_if(in_state(Screen::Playing)),
+        )
         .add_systems(
             Update,
             (toggle_settings, update_settings_text)
@@ -169,6 +178,12 @@ fn update_fps(
     }
 }
 
+fn update_score(score: Res<Score>, mut text: Query<&mut Text, With<ScoreText>>) {
+    for mut text in &mut text {
+        **text = format!("Score: {}", score.0);
+    }
+}
+
 fn playing(mut commands: Commands) {
     label(
         &mut commands,
@@ -176,6 +191,16 @@ fn playing(mut commands: Commands) {
         18.0,
         14.0,
     );
+    let score_text = label(&mut commands, "Score: 0", 22.0, 0.0);
+    commands.entity(score_text).insert((
+        ScoreText,
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(50),
+            bottom: px(14),
+            ..default()
+        },
+    ));
     commands.spawn((
         ScreenEntity,
         Sprite::from_color(Color::srgb(0.07, 0.12, 0.18), HALF_ARENA * 2.0),
@@ -185,22 +210,17 @@ fn playing(mut commands: Commands) {
         ScreenEntity,
         Player,
         Sprite::from_color(Color::srgb(0.3, 0.95, 0.8), Vec2::splat(PLAYER_SIZE)),
-        Transform::from_xyz(-280.0, 0.0, 1.0),
+        Transform::from_translation(PLAYER_SPAWN.extend(1.0)),
     ));
-    for obstacle in [
-        Obstacle {
-            center: Vec2::new(-110.0, 70.0),
-            size: Vec2::new(45.0, 220.0),
-        },
-        Obstacle {
-            center: Vec2::new(80.0, -95.0),
-            size: Vec2::new(180.0, 45.0),
-        },
-        Obstacle {
-            center: Vec2::new(220.0, 100.0),
-            size: Vec2::new(55.0, 120.0),
-        },
-    ] {
+    for position in ITEM_POSITIONS {
+        commands.spawn((
+            ScreenEntity,
+            Item,
+            Sprite::from_color(Color::srgb(1.0, 0.85, 0.2), Vec2::splat(ITEM_SIZE)),
+            Transform::from_translation(position.extend(0.0)),
+        ));
+    }
+    for obstacle in OBSTACLES {
         commands.spawn((
             ScreenEntity,
             obstacle,
