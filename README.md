@@ -1,7 +1,9 @@
 # Drift
 
 A small, quiet 2D obstacle garden built with Bevy. Guide a mint square around
-copper obstacles. There is no score or time limit.
+copper obstacles and collect gold squares to increase the score shown at the
+bottom left. Each new round restores the items and resets the score; the score
+is not saved. There is no time limit.
 
 ## Install and run
 
@@ -24,6 +26,8 @@ optimization is left at Cargo's default to keep compilation time down.
 
 - Menu: Enter opens the garden; S opens settings.
 - Garden: WASD or arrow keys move. Obstacles and the garden edge block movement.
+  Collect gold squares to add one point each to the score HUD. Entering the garden
+  starts a new round with all items and zero score; score is not saved.
 - Settings: F toggles the FPS display and saves immediately.
 - Esc returns to the menu from either screen. Close the window to quit.
 
@@ -56,6 +60,9 @@ cargo run --locked
 
 Tests cover settings round trips, missing and invalid files, state transitions,
 time-based movement, diagonal speed, obstacle collisions, and garden boundaries.
+They also cover item collection, scoring once per item, round score resets,
+scoring only while playing, and reachable item positions. The score HUD shows
+the current round only; scores are not saved.
 The Bevy system tests use `MinimalPlugins` without a window or renderer.
 
 For a short display-server smoke run on Linux:

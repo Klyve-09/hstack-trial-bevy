@@ -21,6 +21,73 @@ pub const HALF_ARENA: Vec2 = Vec2::new(350.0, 230.0);
 pub const PLAYER_SIZE: f32 = 26.0;
 const SPEED: f32 = 220.0;
 
+#[derive(Resource, Default)]
+pub struct Score(pub u32);
+
+#[derive(Component)]
+pub struct Item;
+
+pub const ITEM_SIZE: f32 = 16.0;
+pub const PLAYER_SPAWN: Vec2 = Vec2::new(-280.0, 0.0);
+pub const ITEM_POSITIONS: [Vec2; 5] = [
+    Vec2::new(-260.0, 150.0),
+    Vec2::new(-230.0, -150.0),
+    Vec2::new(0.0, 100.0),
+    Vec2::new(280.0, -170.0),
+    Vec2::new(310.0, 180.0),
+];
+pub const OBSTACLES: [Obstacle; 3] = [
+    Obstacle {
+        center: Vec2::new(-110.0, 70.0),
+        size: Vec2::new(45.0, 220.0),
+    },
+    Obstacle {
+        center: Vec2::new(80.0, -95.0),
+        size: Vec2::new(180.0, 45.0),
+    },
+    Obstacle {
+        center: Vec2::new(220.0, 100.0),
+        size: Vec2::new(55.0, 120.0),
+    },
+];
+
+pub struct ScorePlugin;
+
+impl Plugin for ScorePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Score>()
+            .add_systems(OnEnter(Screen::Playing), reset_score)
+            .add_systems(
+                Update,
+                collect_items
+                    .after(movement)
+                    .run_if(in_state(Screen::Playing)),
+            );
+    }
+}
+
+fn reset_score(mut score: ResMut<Score>) {
+    score.0 = 0;
+}
+
+pub fn collect_items(
+    mut commands: Commands,
+    mut score: ResMut<Score>,
+    players: Query<&Transform, With<Player>>,
+    items: Query<(Entity, &Transform), With<Item>>,
+) {
+    let extent = (PLAYER_SIZE + ITEM_SIZE) / 2.0;
+    for (entity, item) in &items {
+        if players.iter().any(|player| {
+            let distance = (player.translation - item.translation).truncate().abs();
+            distance.x < extent && distance.y < extent
+        }) {
+            score.0 += 1;
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 pub fn navigate(
     keys: Res<ButtonInput<KeyCode>>,
     state: Res<State<Screen>>,
@@ -87,7 +154,7 @@ mod tests {
 
     fn app() -> App {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, StatesPlugin))
+        app.add_plugins((MinimalPlugins, StatesPlugin, ScorePlugin))
             .init_state::<Screen>()
             .init_resource::<ButtonInput<KeyCode>>()
             .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
@@ -108,6 +175,110 @@ mod tests {
             .resource_mut::<ButtonInput<KeyCode>>()
             .reset_all();
         app.update();
+    }
+
+    #[test]
+    fn collecting_an_item_scores_once_and_despawns_it() {
+        let mut app = app();
+        press(&mut app, KeyCode::Enter);
+        app.world_mut().spawn((Player, Transform::default()));
+        let item = app
+            .world_mut()
+            .spawn((Item, Transform::from_xyz(20.0, 0.0, 0.0)))
+            .id();
+        app.update();
+        assert_eq!(app.world().resource::<Score>().0, 1);
+        assert!(app.world().get_entity(item).is_err());
+        app.update();
+        assert_eq!(app.world().resource::<Score>().0, 1);
+    }
+
+    #[test]
+    fn entering_a_new_round_resets_the_score() {
+        let mut app = app();
+        press(&mut app, KeyCode::Enter);
+        app.world_mut().spawn((Player, Transform::default()));
+        app.world_mut().spawn((Item, Transform::default()));
+        app.update();
+        assert_eq!(app.world().resource::<Score>().0, 1);
+        press(&mut app, KeyCode::Escape);
+        assert_eq!(*app.world().resource::<State<Screen>>().get(), Screen::Menu);
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(
+            *app.world().resource::<State<Screen>>().get(),
+            Screen::Playing
+        );
+        assert_eq!(app.world().resource::<Score>().0, 0);
+    }
+
+    #[test]
+    fn separated_item_does_not_score() {
+        let mut app = app();
+        press(&mut app, KeyCode::Enter);
+        app.world_mut().spawn((Player, Transform::default()));
+        for position in [Vec2::new(22.0, 0.0), Vec2::new(0.0, 22.0)] {
+            let item = app
+                .world_mut()
+                .spawn((Item, Transform::from_translation(position.extend(0.0))))
+                .id();
+            app.update();
+            assert_eq!(app.world().resource::<Score>().0, 0);
+            assert!(app.world().get_entity(item).is_ok());
+        }
+    }
+
+    #[test]
+    fn items_are_not_collected_outside_playing() {
+        let mut app = app();
+        app.world_mut().spawn((Player, Transform::default()));
+        let item = app.world_mut().spawn((Item, Transform::default())).id();
+        for screen in [Screen::Menu, Screen::Settings] {
+            app.world_mut()
+                .resource_mut::<NextState<Screen>>()
+                .set(screen);
+            app.update();
+            assert_eq!(app.world().resource::<Score>().0, 0);
+            assert!(app.world().get_entity(item).is_ok());
+        }
+    }
+
+    #[test]
+    fn collection_uses_the_position_after_movement() {
+        let mut app = app();
+        press(&mut app, KeyCode::Enter);
+        app.world_mut().spawn((Player, Transform::default()));
+        app.world_mut()
+            .spawn((Item, Transform::from_xyz(40.0, 0.0, 0.0)));
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyD);
+        app.update();
+        assert_eq!(app.world().resource::<Score>().0, 1);
+    }
+
+    #[test]
+    fn every_item_position_is_reachable_and_clear_of_spawn() {
+        let limit = HALF_ARENA - Vec2::splat(PLAYER_SIZE / 2.0);
+        for position in ITEM_POSITIONS {
+            assert!(
+                position.abs().cmple(limit).all(),
+                "outside arena: {position}"
+            );
+            let spawn_distance = (position - PLAYER_SPAWN).abs();
+            assert!(
+                spawn_distance.x >= (PLAYER_SIZE + ITEM_SIZE) / 2.0
+                    || spawn_distance.y >= (PLAYER_SIZE + ITEM_SIZE) / 2.0,
+                "overlaps spawn: {position}"
+            );
+            for obstacle in OBSTACLES {
+                let distance = (position - obstacle.center).abs();
+                let extent = (obstacle.size + Vec2::splat(PLAYER_SIZE)) / 2.0;
+                assert!(
+                    distance.x >= extent.x || distance.y >= extent.y,
+                    "blocked by obstacle: {position}"
+                );
+            }
+        }
     }
 
     #[test]
