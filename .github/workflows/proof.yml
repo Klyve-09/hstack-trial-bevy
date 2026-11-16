@@ -1,0 +1,33 @@
+name: Proof
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libx11-dev libxkbcommon-dev libvulkan1 mesa-vulkan-drivers
+      - name: Install Rust toolchain
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup component add clippy rustfmt
+      - name: test
+        run: cargo test --locked -j 2
+      - name: clippy
+        run: cargo clippy --locked --all-targets -j 2 -- -D warnings
+      - name: fmt
+        run: cargo fmt --check
+      - name: build
+        run: cargo build --locked -j 2
